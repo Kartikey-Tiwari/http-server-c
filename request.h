@@ -1,7 +1,7 @@
 #ifndef REQUEST_H
 #define REQUEST_H
 
-#include <glib-2.0/glib.h>
+#include <glib.h>
 
 typedef struct RequestLine {
   char *method;
@@ -28,4 +28,6 @@ typedef struct Request {
 } Request;
 
 void printRequest(Request *req);
+
+void freeRequest(Request *req);
 #endif

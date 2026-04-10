@@ -28,3 +28,11 @@ void printRequest(Request *req) {
     printf("----Body----\n%s\n----end----\n", req->body);
   }
 }
+
+void freeRequest(Request *req) {
+  g_free(req->body);
+  g_hash_table_destroy(req->headers);
+  g_free(req->rql.method);
+  g_free(req->rql.resource);
+  g_free(req->rql.http);
+}

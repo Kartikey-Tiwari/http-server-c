@@ -1,4 +1,5 @@
 #include "server.h"
+#include "headers.h"
 #include "parser.h"
 #include "request.h"
 #include "response.h"
@@ -85,7 +86,7 @@ Request *readRequestFromClient(int new_fd) {
   GString *line = g_string_new(NULL);
   Request *req = malloc(sizeof(Request));
   req->state = INITIALIZED;
-  req->headers = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+  req->headers = createHeaders();
 
   while (keep_running) {
     bytesReceived = recv(new_fd, buf, 8, 0);
@@ -112,27 +113,27 @@ Request *readRequestFromClient(int new_fd) {
   }
   if (req->state == ERROR_STATE) {
     writeStatusLine(new_fd, BAD_REQUEST);
-    GHashTable *headers = getDefaultHeaders(0);
+    Headers *headers = getDefaultHeaders(0);
     writeHeaders(new_fd, headers);
-    g_hash_table_destroy(headers);
+    headers_free(headers);
     close(new_fd);
-    exit(0)
+    exit(0);
   } else if (!keep_running) {
     if (req->state == INITIALIZED) {
       printf("[Child %d] Idle connection closed gracefully.\n", getpid());
       writeStatusLine(new_fd, SERVER_ERROR);
-      GHashTable *headers = getDefaultHeaders(0);
+      Headers *headers = getDefaultHeaders(0);
       writeHeaders(new_fd, headers);
-      g_hash_table_destroy(headers);
+      headers_free(headers);
       close(new_fd);
       exit(0);
     } else if (req->state != DONE) {
       printf("[Child %d] Interrupted mid-request. Sending 503...\n", getpid());
 
       writeStatusLine(new_fd, SERVER_ERROR);
-      GHashTable *headers = getDefaultHeaders(0);
+      Headers *headers = getDefaultHeaders(0);
       writeHeaders(new_fd, headers);
-      g_hash_table_destroy(headers);
+      headers_free(headers);
       close(new_fd);
       exit(0);
     }
@@ -182,9 +183,9 @@ void serverListen(Server *server) {
         printRequest(req);
       }
       writeStatusLine(new_fd, status);
-      GHashTable *headers = getDefaultHeaders(0);
+      Headers *headers = getDefaultHeaders(0);
       writeHeaders(new_fd, headers);
-      g_hash_table_destroy(headers);
+      headers_free(headers);
 
       freeRequest(req);
       close(new_fd);

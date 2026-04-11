@@ -1,6 +1,7 @@
 #ifndef RESPONSE_H
 #define RESPONSE_H
 
+#include "headers.h"
 #include <glib.h>
 
 typedef enum StatusCode {
@@ -11,7 +12,7 @@ typedef enum StatusCode {
 
 void writeStatusLine(int fd, StatusCode status);
 
-GHashTable *getDefaultHeaders(int contentLen);
+Headers *getDefaultHeaders(int contentLen);
 
-void writeHeaders(int fd, GHashTable *headers);
+void writeHeaders(int fd, Headers *headers);
 #endif

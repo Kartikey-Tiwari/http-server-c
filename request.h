@@ -1,6 +1,7 @@
 #ifndef REQUEST_H
 #define REQUEST_H
 
+#include "headers.h"
 #include <glib.h>
 
 typedef struct RequestLine {
@@ -20,7 +21,7 @@ typedef enum RequestState {
 
 typedef struct Request {
   RequestLine rql;
-  GHashTable *headers;
+  Headers *headers;
   char *body;
   int contentLen;
   int bytesRead;

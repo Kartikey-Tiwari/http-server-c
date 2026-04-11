@@ -1,4 +1,5 @@
 #include "request.h"
+#include "headers.h"
 #include <stdio.h>
 
 void printRequestLine(RequestLine *rql) {
@@ -9,6 +10,7 @@ void printRequestLine(RequestLine *rql) {
 }
 
 void print_upper(gpointer key, gpointer value, gpointer user_data) {
+  (void)user_data;
   char *key_upper = g_ascii_strup((char *)key, -1);
   char *value_upper = g_ascii_strup((char *)value, -1);
 
@@ -22,7 +24,7 @@ void printRequest(Request *req) {
   printRequestLine(&req->rql);
 
   printf("----Headers----\n");
-  g_hash_table_foreach(req->headers, print_upper, NULL);
+  headersForEach(req->headers, print_upper, NULL);
 
   if (req->contentLen != 0) {
     printf("----Body----\n%s\n----end----\n", req->body);
@@ -31,7 +33,7 @@ void printRequest(Request *req) {
 
 void freeRequest(Request *req) {
   g_free(req->body);
-  g_hash_table_destroy(req->headers);
+  headers_free(req->headers);
   g_free(req->rql.method);
   g_free(req->rql.resource);
   g_free(req->rql.http);

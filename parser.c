@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "headers.h"
 #include "utils.h"
 #include <ctype.h>
 #include <stdio.h>
@@ -127,17 +128,7 @@ ErrorCode readHeaderLine(GString *line, Request *req) {
       return rv;
     }
 
-    char *prevValue = g_hash_table_lookup(req->headers, field);
-    if (prevValue == NULL) {
-      g_hash_table_insert(req->headers, g_strdup(field), g_strdup(value));
-    } else {
-      GString *newValue = g_string_new(prevValue);
-      g_string_append(newValue, ",");
-      g_string_append(newValue, value);
-      g_hash_table_insert(req->headers, g_strdup(field),
-                          g_strdup(newValue->str));
-      g_string_free(newValue, TRUE);
-    }
+    addToHeader(req->headers, field, value);
   } else {
     rv = HEADER_FORMAT_ERROR;
   }
@@ -185,7 +176,7 @@ ParseAction parse(char *buf, int *bufSize, int *lookForStartingLF,
     }
     break;
   case READ_HEADERS:
-    char *value = g_hash_table_lookup(req->headers, "content-length");
+    char *value = headerLookup(req->headers, "content-length");
     if (value == NULL) {
       req->state = DONE;
       rv = NOTHING_TO_DO;

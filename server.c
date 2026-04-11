@@ -1,6 +1,7 @@
 #include "server.h"
 #include "parser.h"
 #include "request.h"
+#include "response.h"
 #include "utils.h"
 
 #include <arpa/inet.h>
@@ -10,7 +11,6 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -110,23 +110,29 @@ Request *readRequestFromClient(int new_fd) {
       break;
     }
   }
-  if (!keep_running) {
+  if (req->state == ERROR_STATE) {
+    writeStatusLine(new_fd, BAD_REQUEST);
+    GHashTable *headers = getDefaultHeaders(0);
+    writeHeaders(new_fd, headers);
+    g_hash_table_destroy(headers);
+    close(new_fd);
+    exit(0)
+  } else if (!keep_running) {
     if (req->state == INITIALIZED) {
       printf("[Child %d] Idle connection closed gracefully.\n", getpid());
-      char *error_response = "HTTP/1.1 503 Service Unavailable\r\n"
-                             "Content-Length: 0\r\n"
-                             "Connection: close\r\n\r\n";
-      send(new_fd, error_response, strlen(error_response), 0);
+      writeStatusLine(new_fd, SERVER_ERROR);
+      GHashTable *headers = getDefaultHeaders(0);
+      writeHeaders(new_fd, headers);
+      g_hash_table_destroy(headers);
       close(new_fd);
       exit(0);
     } else if (req->state != DONE) {
       printf("[Child %d] Interrupted mid-request. Sending 503...\n", getpid());
 
-      // Politely tell the browser the server is going down
-      char *error_response = "HTTP/1.1 503 Service Unavailable\r\n"
-                             "Content-Length: 0\r\n"
-                             "Connection: close\r\n\r\n";
-      send(new_fd, error_response, strlen(error_response), 0);
+      writeStatusLine(new_fd, SERVER_ERROR);
+      GHashTable *headers = getDefaultHeaders(0);
+      writeHeaders(new_fd, headers);
+      g_hash_table_destroy(headers);
       close(new_fd);
       exit(0);
     }
@@ -170,21 +176,16 @@ void serverListen(Server *server) {
       close(server->sockfd);
 
       Request *req = readRequestFromClient(new_fd);
+      int status = BAD_REQUEST;
       if (req->state == DONE) {
+        status = OK;
         printRequest(req);
-      } else {
       }
-      char *response = "HTTP/1.1 200 OK\r\nContent-Type: "
-                       "text/plain\r\nContent-Length: 12\r\n\r\nHello World!";
-      int responseLen = strlen(response);
-      int bytesLeft = responseLen;
-      int rv;
+      writeStatusLine(new_fd, status);
+      GHashTable *headers = getDefaultHeaders(0);
+      writeHeaders(new_fd, headers);
+      g_hash_table_destroy(headers);
 
-      while ((rv = send(new_fd, response + responseLen - bytesLeft, bytesLeft,
-                        0)) != -1 &&
-             bytesLeft != 0) {
-        bytesLeft -= rv;
-      }
       freeRequest(req);
       close(new_fd);
       exit(0);

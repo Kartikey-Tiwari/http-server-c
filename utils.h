@@ -2,7 +2,6 @@
 #define UTILS_H
 
 #include <netinet/in.h>
-#include <sys/socket.h>
 
 #define numMethods 8
 extern char *httpMethods[];
@@ -19,4 +18,5 @@ int isValidHeaderValue(char *fieldValue);
 
 int isValidContentLength(char *val);
 
+void safeSend(int fd, char *buf, int bufSize);
 #endif

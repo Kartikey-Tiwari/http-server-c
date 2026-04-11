@@ -7,7 +7,7 @@ LDLIBS = $(shell pkg-config --libs glib-2.0)
 OBJ_DIR = obj
 
 # --- Files ---
-SRCS = main.c server.c parser.c request.c utils.c
+SRCS = main.c server.c parser.c request.c utils.c response.c
 
 # This magic line takes your SRCS list and changes "main.c" into "obj/main.o"
 OBJS = $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRCS))

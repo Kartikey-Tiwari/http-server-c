@@ -1,6 +1,7 @@
 #include "utils.h"
 #include <ctype.h>
 #include <string.h>
+#include <sys/socket.h>
 
 char *httpMethods[] = {"GET",    "HEAD",    "POST",    "PUT",
                        "DELETE", "CONNECT", "OPTIONS", "TRACE"};
@@ -57,4 +58,12 @@ int isValidContentLength(char *val) {
     }
   }
   return 1;
+}
+
+void safeSend(int fd, char *buf, int bufSize) {
+  int rv, bytesLeft = bufSize;
+  while ((rv = send(fd, buf + bufSize - bytesLeft, bytesLeft, 0)) != -1 &&
+         bytesLeft != 0) {
+    bytesLeft -= rv;
+  }
 }

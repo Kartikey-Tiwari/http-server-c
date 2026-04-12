@@ -11,11 +11,11 @@ typedef struct RequestLine {
 } RequestLine;
 
 typedef enum RequestState {
-  INITIALIZED,
+  REQUEST_INITIALIZED,
   READ_REQUEST_LINE,
   READ_HEADERS,
   READING_BODY,
-  ERROR_STATE,
+  REQUEST_ERROR,
   DONE
 } RequestState;
 
@@ -27,6 +27,8 @@ typedef struct Request {
   int bytesRead;
   RequestState state;
 } Request;
+
+Request *createRequest();
 
 void printRequest(Request *req);
 

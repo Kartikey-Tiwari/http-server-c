@@ -1,13 +1,14 @@
 #include "parser.h"
 #include "headers.h"
+#include "request.h"
 #include "utils.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
-ErrorCode readTillCRLF(char *buf, int *bufSize, int *lookForStartingLF,
-                       GString *line, Request *req,
-                       ErrorCode (*fn)(GString *, Request *)) {
+ReturnCode readTillCRLF(char *buf, int *bufSize, int *lookForStartingLF,
+                        GString *line, Request *req,
+                        ReturnCode (*fn)(GString *, Request *)) {
   char *crlf = strstr(buf, "\r\n");
 
   int rv;
@@ -22,7 +23,7 @@ ErrorCode readTillCRLF(char *buf, int *bufSize, int *lookForStartingLF,
       *bufSize = *bufSize - 1;
       *lookForStartingLF = 0;
     } else {
-      if (req->state == INITIALIZED) {
+      if (req->state == REQUEST_INITIALIZED) {
         rv = REQUEST_INVALID_CHAR_ERROR;
       } else if (req->state == READ_REQUEST_LINE) {
         rv = HEADER_FORMAT_ERROR;
@@ -58,8 +59,8 @@ ErrorCode readTillCRLF(char *buf, int *bufSize, int *lookForStartingLF,
   }
 }
 
-ErrorCode readRequestLine(GString *line, Request *req) {
-  ErrorCode rv = SUCCESS_READ_REQ_LINE;
+ReturnCode readRequestLine(GString *line, Request *req) {
+  ReturnCode rv = SUCCESS_READ_REQ_LINE;
   char **parts = g_strsplit(line->str, " ", -1);
   int i;
   for (i = 0; parts[i] != NULL; i++) {
@@ -99,8 +100,8 @@ ErrorCode readRequestLine(GString *line, Request *req) {
   return rv;
 }
 
-ErrorCode readHeaderLine(GString *line, Request *req) {
-  ErrorCode rv = SUCCESS_READ_HEADER;
+ReturnCode readHeaderLine(GString *line, Request *req) {
+  ReturnCode rv = SUCCESS_READ_HEADER;
   if (*(line->str) == '\0') {
     rv = SUCCESS_HEADERS_DONE;
     return rv;
@@ -136,8 +137,8 @@ ErrorCode readHeaderLine(GString *line, Request *req) {
   return rv;
 }
 
-ErrorCode readBodyWithLen(char *buf, int *bufSize, GString *line,
-                          Request *req) {
+ReturnCode readBodyWithLen(char *buf, int *bufSize, GString *line,
+                           Request *req) {
   int bytesLeft = req->contentLen - req->bytesRead;
 
   if (bytesLeft - *bufSize < 0) {
@@ -158,20 +159,19 @@ ErrorCode readBodyWithLen(char *buf, int *bufSize, GString *line,
 }
 
 ParseAction parse(char *buf, int *bufSize, int *lookForStartingLF,
-                  GString *line, Request *req) {
-  int rv;
+                  GString *line, Request *req, ReturnCode *err) {
   switch (req->state) {
-  case INITIALIZED:
-    rv = readTillCRLF(buf, bufSize, lookForStartingLF, line, req,
-                      readRequestLine);
-    if (rv == SUCCESS_READ_REQ_LINE) {
+  case REQUEST_INITIALIZED:
+    *err = readTillCRLF(buf, bufSize, lookForStartingLF, line, req,
+                        readRequestLine);
+    if (*err == SUCCESS_READ_REQ_LINE) {
       req->state = READ_REQUEST_LINE;
     }
     break;
   case READ_REQUEST_LINE:
-    rv = readTillCRLF(buf, bufSize, lookForStartingLF, line, req,
-                      readHeaderLine);
-    if (rv == SUCCESS_HEADERS_DONE) {
+    *err = readTillCRLF(buf, bufSize, lookForStartingLF, line, req,
+                        readHeaderLine);
+    if (*err == SUCCESS_HEADERS_DONE) {
       req->state = READ_HEADERS;
     }
     break;
@@ -179,7 +179,7 @@ ParseAction parse(char *buf, int *bufSize, int *lookForStartingLF,
     char *value = headerLookup(req->headers, "content-length");
     if (value == NULL) {
       req->state = DONE;
-      rv = NOTHING_TO_DO;
+      *err = NOTHING_TO_DO;
       break;
     }
     if (isValidContentLength(value)) {
@@ -187,19 +187,19 @@ ParseAction parse(char *buf, int *bufSize, int *lookForStartingLF,
       req->contentLen = len;
       req->bytesRead = 0;
       req->state = READING_BODY;
-      rv = PREPARED_BODY_PARSER;
+      *err = PREPARED_BODY_PARSER;
     } else {
-      rv = HEADER_FORMAT_ERROR;
+      *err = HEADER_FORMAT_ERROR;
     }
     break;
   case READING_BODY:
-    rv = readBodyWithLen(buf, bufSize, line, req);
-    if (rv == SUCCESS_READ_BODY) {
+    *err = readBodyWithLen(buf, bufSize, line, req);
+    if (*err == SUCCESS_READ_BODY) {
       req->state = DONE;
     }
     break;
   case DONE:
-    rv = NOTHING_TO_DO;
+    *err = NOTHING_TO_DO;
     break;
   default:
   }
@@ -207,16 +207,57 @@ ParseAction parse(char *buf, int *bufSize, int *lookForStartingLF,
     return ACTION_DONE;
   }
 
-  if (rv == REQUEST_METHOD_ERROR || rv == REQUEST_HTTP_VER_ERROR ||
-      rv == REQUEST_INVALID_CHAR_ERROR || rv == HEADER_FORMAT_ERROR ||
-      rv == BODY_LENGTH_MISMATCH || req->state == ERROR_STATE) {
-    req->state = ERROR_STATE;
+  if (*err == REQUEST_METHOD_ERROR || *err == REQUEST_HTTP_VER_ERROR ||
+      *err == REQUEST_INVALID_CHAR_ERROR || *err == HEADER_FORMAT_ERROR ||
+      *err == BODY_LENGTH_MISMATCH || req->state == REQUEST_ERROR) {
+    req->state = REQUEST_ERROR;
     return ACTION_ERROR;
   }
 
-  if (rv == READ_NOT_PARSED || rv == READ_BODY) {
+  if (*err == READ_NOT_PARSED || *err == READ_BODY) {
     return ACTION_NEED_MORE_DATA;
   }
 
   return ACTION_CONTINUE;
+}
+
+ReturnCode readRequestFromClient(int fd, Request **request,
+                                 volatile sig_atomic_t *keep_running) {
+  char buf[9];
+  buf[8] = '\0';
+
+  int bytesReceived, lookForStartingLF = 0;
+  GString *line = g_string_new(NULL);
+  ReturnCode rc;
+
+  while (*keep_running) {
+    bytesReceived = recv(fd, buf, 8, 0);
+    if (bytesReceived < 0) {
+      if (errno == EINTR) {
+        break;
+      }
+      perror("recv failed");
+      break;
+    } else if (bytesReceived == 0) {
+      break;
+    }
+    int rv = bytesReceived;
+    buf[rv] = '\0';
+
+    ParseAction action =
+        parse(buf, &rv, &lookForStartingLF, line, *request, &rc);
+    while (action == ACTION_CONTINUE) {
+      action = parse(buf, &rv, &lookForStartingLF, line, *request, &rc);
+    }
+
+    if (action == ACTION_DONE || action == ACTION_ERROR) {
+      break;
+    }
+  }
+  if (!(*keep_running)) {
+    rc = INTERRUPTED;
+  }
+  g_string_free(line, TRUE);
+
+  return rc;
 }

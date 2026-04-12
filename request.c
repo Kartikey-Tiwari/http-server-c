@@ -2,6 +2,16 @@
 #include "headers.h"
 #include <stdio.h>
 
+Request *createRequest() {
+  Request *req = (Request *)malloc(sizeof(Request));
+  req->headers = createHeaders();
+  req->body = NULL;
+  req->contentLen = 0;
+  req->bytesRead = 0;
+  req->state = REQUEST_INITIALIZED;
+  return req;
+}
+
 void printRequestLine(RequestLine *rql) {
   printf("----Request Line----\n");
   printf("Method: %s\n", rql->method);

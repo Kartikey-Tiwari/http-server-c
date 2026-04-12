@@ -7,26 +7,45 @@ Headers *createHeaders() {
   return headers;
 }
 void setHeader(Headers *headers, char *headerField, char *headerValue) {
-  g_hash_table_insert(headers->headers, g_strdup(headerField),
+  if (headerField == NULL) {
+    return;
+  }
+  char *lowerField = g_ascii_strdown(headerField, -1);
+
+  g_hash_table_insert(headers->headers, g_strdup(lowerField),
                       g_strdup(headerValue));
+
+  g_free(lowerField);
 }
 
 char *headerLookup(Headers *headers, char *headerField) {
-  return g_hash_table_lookup(headers->headers, headerField);
+  if (headerField == NULL) {
+    return NULL;
+  }
+  char *lowerField = g_ascii_strdown(headerField, -1);
+  char *val = g_hash_table_lookup(headers->headers, lowerField);
+  g_free(lowerField);
+  return val;
 }
 
 void addToHeader(Headers *headers, char *headerField, char *headerValue) {
+  if (headerField == NULL) {
+    return;
+  }
+  char *lowerField = g_ascii_strdown(headerField, -1);
+
   char *prevValue = headerLookup(headers, headerField);
   if (prevValue == NULL) {
-    setHeader(headers, headerField, headerValue);
+    setHeader(headers, lowerField, headerValue);
   } else {
     GString *newValue = g_string_new(prevValue);
     g_string_append(newValue, ",");
     g_string_append(newValue, headerValue);
-    g_hash_table_insert(headers->headers, g_strdup(headerField),
+    g_hash_table_insert(headers->headers, g_strdup(lowerField),
                         g_strdup(newValue->str));
     g_string_free(newValue, TRUE);
   }
+  g_free(lowerField);
 }
 
 void headersForEach(Headers *headers, void (*fn)(void *, void *, void *),

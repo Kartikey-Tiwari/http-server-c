@@ -1,5 +1,6 @@
 #include "utils.h"
 #include <ctype.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 
@@ -66,4 +67,30 @@ void safeSend(int fd, char *buf, int bufSize) {
          bytesLeft != 0) {
     bytesLeft -= rv;
   }
+}
+
+char *itoa(int n) {
+  char *buf = malloc(sizeof(char) * 11);
+  int r, idx = 0;
+  if (n == 0) {
+    buf[0] = '0';
+    buf[1] = '\0';
+    return buf;
+  }
+  while (n) {
+    r = n % 10;
+    n = n / 10;
+    buf[idx++] = '0' + r;
+  }
+  buf[idx] = '\0';
+  idx--;
+
+  int x = 0;
+  char temp;
+  while (x <= idx) {
+    temp = buf[x];
+    buf[x++] = buf[idx];
+    buf[idx--] = temp;
+  }
+  return buf;
 }

@@ -6,12 +6,12 @@
 #include "utils.h"
 
 #include <arpa/inet.h>
-#include <asm-generic/errno-base.h>
 #include <errno.h>
 #include <glib.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -78,76 +78,8 @@ Server *createServer(int port) {
   return server;
 }
 
-Request *readRequestFromClient(int new_fd) {
-  char buf[9];
-  buf[8] = '\0';
-
-  int bytesReceived, lookForStartingLF = 0;
-  GString *line = g_string_new(NULL);
-  Request *req = malloc(sizeof(Request));
-  req->state = INITIALIZED;
-  req->headers = createHeaders();
-
-  while (keep_running) {
-    bytesReceived = recv(new_fd, buf, 8, 0);
-    if (bytesReceived < 0) {
-      if (errno == EINTR) {
-        break;
-      }
-      perror("recv failed");
-      break;
-    } else if (bytesReceived == 0) {
-      break;
-    }
-    int rv = bytesReceived;
-    buf[rv] = '\0';
-
-    ParseAction action = parse(buf, &rv, &lookForStartingLF, line, req);
-    while (action == ACTION_CONTINUE) {
-      action = parse(buf, &rv, &lookForStartingLF, line, req);
-    }
-
-    if (action == ACTION_DONE || action == ACTION_ERROR) {
-      break;
-    }
-  }
-  if (req->state == ERROR_STATE) {
-    writeStatusLine(new_fd, BAD_REQUEST);
-    Headers *headers = getDefaultHeaders(0);
-    writeHeaders(new_fd, headers);
-    headers_free(headers);
-    close(new_fd);
-    exit(0);
-  } else if (!keep_running) {
-    if (req->state == INITIALIZED) {
-      printf("[Child %d] Idle connection closed gracefully.\n", getpid());
-      writeStatusLine(new_fd, SERVER_ERROR);
-      Headers *headers = getDefaultHeaders(0);
-      writeHeaders(new_fd, headers);
-      headers_free(headers);
-      close(new_fd);
-      exit(0);
-    } else if (req->state != DONE) {
-      printf("[Child %d] Interrupted mid-request. Sending 503...\n", getpid());
-
-      writeStatusLine(new_fd, SERVER_ERROR);
-      Headers *headers = getDefaultHeaders(0);
-      writeHeaders(new_fd, headers);
-      headers_free(headers);
-      close(new_fd);
-      exit(0);
-    }
-  }
-  g_string_free(line, TRUE);
-
-  if (req->state == DONE) {
-    return req;
-  } else {
-    return NULL;
-  }
-}
-
-void serverListen(Server *server) {
+void serverListen(Server *server,
+                  void (*handler)(Request *req, Response *res)) {
   if (listen(server->sockfd, 10) < 0) {
     perror("listen: failed");
     exit(1);
@@ -166,7 +98,7 @@ void serverListen(Server *server) {
         break;
       }
       perror("accept");
-      continue;
+      break;
     }
 
     inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr),
@@ -176,19 +108,50 @@ void serverListen(Server *server) {
     if (!fork()) {
       close(server->sockfd);
 
-      Request *req = readRequestFromClient(new_fd);
-      int status = BAD_REQUEST;
-      if (req->state == DONE) {
-        status = OK;
-        printRequest(req);
-      }
-      writeStatusLine(new_fd, status);
-      Headers *headers = getDefaultHeaders(0);
-      writeHeaders(new_fd, headers);
-      headers_free(headers);
+      Response *res = createResponse(new_fd);
 
-      freeRequest(req);
-      close(new_fd);
+      Request *req = createRequest();
+      ReturnCode rc = readRequestFromClient(new_fd, &req, &keep_running);
+
+      if (req->state == REQUEST_ERROR || rc == INTERRUPTED) {
+        StatusCode status = OK;
+        switch (rc) {
+        case REQUEST_METHOD_ERROR:
+        case REQUEST_INVALID_CHAR_ERROR:
+        case HEADER_FORMAT_ERROR:
+        case BODY_LENGTH_MISMATCH:
+          printf("bad request!\n");
+          status = BAD_REQUEST;
+          break;
+        case REQUEST_HTTP_VER_ERROR:
+          printf("http version not supported");
+          status = HTTP_UNSUPPORTED_VER;
+          break;
+        case INTERRUPTED:
+          printf("server interrupted");
+          status = SERVER_ERROR;
+          break;
+        default:;
+        }
+        writeStatusLine(res, status);
+        setHeader(res->headers, "Content-Type", "text/html");
+        char *body = httpCodeToHTML(status);
+        int bodyLen = strlen(body);
+        char *len = itoa(bodyLen);
+        setHeader(res->headers, "Content-Length", len);
+        free(len);
+        writeHeaders(res);
+        writeBody(res, body, bodyLen);
+        responseEnd(res);
+      } else {
+        if (req->state == DONE) {
+          printRequest(req);
+          handler(req, res);
+          if (res->state != RESPONSE_DONE) {
+            responseEnd(res);
+          }
+        }
+      }
       exit(0);
     }
     close(new_fd);

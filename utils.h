@@ -19,4 +19,6 @@ int isValidHeaderValue(char *fieldValue);
 int isValidContentLength(char *val);
 
 void safeSend(int fd, char *buf, int bufSize);
+
+char *itoa(int n);
 #endif

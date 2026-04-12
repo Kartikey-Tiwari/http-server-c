@@ -11,7 +11,7 @@ typedef enum ParseAction {
   ACTION_ERROR
 } ParseAction;
 
-typedef enum ErrorCode {
+typedef enum ReturnCode {
   SUCCESS_READ_REQ_LINE = 0,
   SUCCESS_READ_HEADER,
   SUCCESS_HEADERS_DONE,
@@ -24,10 +24,10 @@ typedef enum ErrorCode {
   READ_BODY,
   BODY_LENGTH_MISMATCH,
   SUCCESS_READ_BODY,
-  NOTHING_TO_DO
-} ErrorCode;
+  NOTHING_TO_DO,
+  INTERRUPTED
+} ReturnCode;
 
-ParseAction parse(char *buf, int *bufSize, int *lookForStartingLF,
-                  GString *line, Request *req);
-
+ReturnCode readRequestFromClient(int fd, Request **req,
+                                 volatile sig_atomic_t *keep_running);
 #endif

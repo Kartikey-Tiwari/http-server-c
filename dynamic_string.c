@@ -61,6 +61,23 @@ int d_str_resize(DString *str, size_t desiredSize) {
   return 1;
 }
 
+int d_str_equal(DString *str1, DString *str2) {
+  return strcmp(str1->str, str2->str);
+}
+
+// http://www.cse.yorku.ca/~oz/hash.html
+uint32_t d_str_hash(DString *str) {
+  uint32_t hash = 5381;
+  int c;
+
+  char *p = str->str;
+
+  while ((c = *p++))
+    hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+
+  return hash;
+}
+
 int d_str_append(DString *to_str, const char *from_str) {
   if (!from_str || *from_str == '\0')
     return 0;

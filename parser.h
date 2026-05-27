@@ -2,7 +2,7 @@
 #define PARSER_H
 
 #include "request.h"
-#include <glib.h>
+#include <signal.h>
 
 typedef enum ParseAction {
   ACTION_CONTINUE,

@@ -6,17 +6,17 @@
 void handler(Request *req, Response *res) {
   char *body;
   StatusCode status;
-  if (strcmp(req->rql.resource, "/") == 0) {
+  if (strcmp(req->rql.resource->str, "/") == 0) {
     status = OK;
   } else {
     status = NOT_FOUND;
   }
   body = httpCodeToHTML(status);
   writeStatusLine(res, status);
-  setHeader(res->headers, "Content-Type", "text/html");
+  setHeader(res->headers, d_str_new("Content-Type"), d_str_new("text/html"));
   int bodyLen = strlen(body);
   char *len = itoa(bodyLen);
-  setHeader(res->headers, "Content-Length", len);
+  setHeader(res->headers, d_str_new("Content-Length"), d_str_new(len));
   free(len);
   writeHeaders(res);
   writeBody(res, body, bodyLen);

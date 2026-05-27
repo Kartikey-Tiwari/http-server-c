@@ -1,20 +1,19 @@
 #ifndef HEADERS_H
 #define HEADERS_H
 
-#include <glib.h>
+#include "dynamic_string.h"
+#include "hashmap.h"
 #include <stdlib.h>
 
 typedef struct Headers {
-  GHashTable *headers;
+  hashmap *headers;
 } Headers;
 
 Headers *createHeaders();
 
-void setHeader(Headers *headers, char *headerField, char *headerValue);
+void setHeader(Headers *headers, DString *headerField, DString *headerValue);
 
-char *headerLookup(Headers *headers, char *headerField);
-
-void addToHeader(Headers *headers, char *headerField, char *headerValue);
+DString *headerLookup(Headers *headers, DString *headerField);
 
 void headersForEach(Headers *headers, void (*fn)(void *, void *, void *),
                     void *data);

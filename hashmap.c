@@ -120,7 +120,7 @@ void hashmap_insert(hashmap *map, void *key, void *value) {
 }
 
 void hashmap_foreach(hashmap *map, hashmapForEach forEach, void *data) {
-  for (int i = 0; i < map->allocatedSize; i++) {
+  for (size_t i = 0; i < map->allocatedSize; i++) {
     hashnode *head = map->buckets[i];
     while (head) {
       forEach(head->key, head->value, data);
@@ -133,7 +133,7 @@ void hashmap_destroy(hashmap *map) {
   if (!map)
     return;
 
-  for (int i = 0; i < map->allocatedSize; i++) {
+  for (size_t i = 0; i < map->allocatedSize; i++) {
     hashnode *node = map->buckets[i];
     hashnode *next = NULL;
 

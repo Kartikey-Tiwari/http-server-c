@@ -2,7 +2,6 @@
 #define RESPONSE_H
 
 #include "headers.h"
-#include <glib.h>
 
 typedef enum StatusCode {
   OK = 200,

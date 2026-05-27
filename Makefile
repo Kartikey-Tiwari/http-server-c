@@ -1,37 +1,34 @@
 # --- Setup Variables ---
-CC = gcc
-CFLAGS = -Wall -Wextra -g $(shell pkg-config --cflags glib-2.0)
-LDLIBS = $(shell pkg-config --libs glib-2.0)
+CC ?= cc
+CFLAGS = -Wall -Wextra -g -O2
+SANFLAGS = -fsanitize=address 
+
+ifdef ASAN
+CFLAGS += $(SANFLAGS)
+endif
 
 # --- Directories ---
 OBJ_DIR = obj
 
 # --- Files ---
-SRCS = main.c server.c parser.c request.c utils.c response.c headers.c
-
-# This magic line takes your SRCS list and changes "main.c" into "obj/main.o"
+SRCS = main.c server.c parser.c request.c utils.c response.c headers.c hashmap.c dynamic_string.c
 OBJS = $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRCS))
 
 TARGET = server
 
-# --- Rules ---
-
 # Default target
 all: $(TARGET)
 
-# 1. Link the final executable using the files inside the obj/ folder
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS) $(LDLIBS)
+	$(CC) $(CFLAGS) -o $@ $^ 
 
-# 2. Compile each .c file into a .o file inside the obj/ folder
-# The '| $(OBJ_DIR)' is an order-only prerequisite, ensuring the folder is created first
 $(OBJ_DIR)/%.o: %.c | $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# 3. Create the obj/ directory if it doesn't exist yet
 $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)
 
-# 4. Clean up the executable and the entire obj/ folder
 clean:
 	rm -rf $(OBJ_DIR) $(TARGET)
+
+rebuild: clean all

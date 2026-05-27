@@ -1,4 +1,5 @@
 #include "response.h"
+#include "dynamic_string.h"
 #include "headers.h"
 #include "utils.h"
 #include <string.h>
@@ -11,7 +12,7 @@ Response *createResponse(int fd) {
   res->state = RESPONSE_INITIALIZED;
   res->headers = createHeaders();
 
-  setHeader(res->headers, "Connection", "close");
+  setHeader(res->headers, d_str_new("Connection"), d_str_new("close"));
   return res;
 }
 
@@ -44,13 +45,13 @@ int writeStatusLine(Response *res, StatusCode status) {
 
 void writeHeader(void *key, void *value, void *fd) {
   Response *res = (Response *)fd;
-  GString *header = g_string_new((char *)key);
-  g_string_append(header, ": ");
-  g_string_append(header, (char *)value);
-  g_string_append(header, "\r\n");
+  DString *header = d_str_dup((DString *)key);
+  d_str_append(header, ": ");
+  d_str_append(header, ((DString *)value)->str);
+  d_str_append(header, "\r\n");
 
   safeSend(res->sockfd, header->str, header->len);
-  g_string_free(header, TRUE);
+  d_str_free(header);
 }
 
 int writeHeaders(Response *res) {
@@ -70,13 +71,15 @@ int writeBody(Response *res, char *body, int bodyLen) {
     return 0;
   }
 
-  char *contentLen = headerLookup(res->headers, "content-length");
+  DString *key = d_str_new("content-length");
+  DString *contentLen = headerLookup(res->headers, key);
+  d_str_free(key);
   if (contentLen == NULL) {
     res->state = RESPONSE_ERROR;
     return 0;
   }
 
-  int len = atoi(contentLen);
+  int len = atoi(contentLen->str);
 
   if (len != bodyLen) {
     res->state = RESPONSE_ERROR;

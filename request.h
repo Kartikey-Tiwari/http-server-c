@@ -1,13 +1,13 @@
 #ifndef REQUEST_H
 #define REQUEST_H
 
+#include "dynamic_string.h"
 #include "headers.h"
-#include <glib.h>
 
 typedef struct RequestLine {
-  char *method;
-  char *resource;
-  char *http;
+  DString *method;
+  DString *resource;
+  DString *http;
 } RequestLine;
 
 typedef enum RequestState {
@@ -22,7 +22,7 @@ typedef enum RequestState {
 typedef struct Request {
   RequestLine rql;
   Headers *headers;
-  char *body;
+  DString *body;
   int contentLen;
   int bytesRead;
   RequestState state;

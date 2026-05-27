@@ -7,7 +7,6 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
-#include <glib.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -80,7 +79,7 @@ Server *createServer(int port) {
 
 void serverListen(Server *server,
                   void (*handler)(Request *req, Response *res)) {
-  if (listen(server->sockfd, 10) < 0) {
+  if (listen(server->sockfd, 1024) < 0) {
     perror("listen: failed");
     exit(1);
   }
@@ -103,7 +102,7 @@ void serverListen(Server *server,
 
     inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr),
               s, sizeof s);
-    printf("server: got connection from %s\n", s);
+    printf("\n[Server]: got connection from %s\n", s);
 
     if (!fork()) {
       close(server->sockfd);
@@ -120,25 +119,35 @@ void serverListen(Server *server,
         case REQUEST_INVALID_CHAR_ERROR:
         case HEADER_FORMAT_ERROR:
         case BODY_LENGTH_MISMATCH:
+          if (rc == REQUEST_METHOD_ERROR) {
+            printf("request method error\n");
+          } else if (rc == REQUEST_INVALID_CHAR_ERROR) {
+            printf("request invalid character error\n");
+          } else if (rc == HEADER_FORMAT_ERROR) {
+            printf("Header format error\n");
+          } else if (rc == BODY_LENGTH_MISMATCH) {
+            printf("body length mismatch\n");
+          }
           printf("bad request!\n");
           status = BAD_REQUEST;
           break;
         case REQUEST_HTTP_VER_ERROR:
-          printf("http version not supported");
+          printf("http version not supported\n");
           status = HTTP_UNSUPPORTED_VER;
           break;
         case INTERRUPTED:
-          printf("server interrupted");
+          printf("server interrupted\n");
           status = SERVER_ERROR;
           break;
         default:;
         }
         writeStatusLine(res, status);
-        setHeader(res->headers, "Content-Type", "text/html");
+        setHeader(res->headers, d_str_new("Content-Type"),
+                  d_str_new("text/html"));
         char *body = httpCodeToHTML(status);
         int bodyLen = strlen(body);
         char *len = itoa(bodyLen);
-        setHeader(res->headers, "Content-Length", len);
+        setHeader(res->headers, d_str_new("Content-Length"), d_str_new(len));
         free(len);
         writeHeaders(res);
         writeBody(res, body, bodyLen);
@@ -159,7 +168,7 @@ void serverListen(Server *server,
 }
 
 void stopListening(Server *server) {
-  printf("server stopped");
+  printf("server stopped\n");
   close(server->sockfd);
   exit(0);
 }

@@ -1,4 +1,5 @@
 #include "request.h"
+#include "dynamic_string.h"
 #include "headers.h"
 #include <stdio.h>
 
@@ -14,20 +15,17 @@ Request *createRequest() {
 
 void printRequestLine(RequestLine *rql) {
   printf("----Request Line----\n");
-  printf("Method: %s\n", rql->method);
-  printf("Resource: %s\n", rql->resource);
-  printf("HTTP Version: %s\n", rql->http);
+  printf("Method: %s\n", rql->method->str);
+  printf("Resource: %s\n", rql->resource->str);
+  printf("HTTP Version: %s\n", rql->http->str);
 }
 
-void print_upper(gpointer key, gpointer value, gpointer user_data) {
+void print_upper(void *key, void *value, void *user_data) {
   (void)user_data;
-  char *key_upper = g_ascii_strup((char *)key, -1);
-  char *value_upper = g_ascii_strup((char *)value, -1);
+  d_str_upper((DString *)key);
+  d_str_upper((DString *)value);
 
-  printf("%s: %s\n", key_upper, value_upper);
-
-  g_free(key_upper);
-  g_free(value_upper);
+  printf("%s: %s\n", ((DString *)key)->str, ((DString *)value)->str);
 }
 
 void printRequest(Request *req) {
@@ -37,14 +35,14 @@ void printRequest(Request *req) {
   headersForEach(req->headers, print_upper, NULL);
 
   if (req->contentLen != 0) {
-    printf("----Body----\n%s\n----end----\n", req->body);
+    printf("----Body----\n%s\n----end----\n", req->body->str);
   }
 }
 
 void freeRequest(Request *req) {
-  g_free(req->body);
+  d_str_free(req->body);
   headers_free(req->headers);
-  g_free(req->rql.method);
-  g_free(req->rql.resource);
-  g_free(req->rql.http);
+  d_str_free(req->rql.method);
+  d_str_free(req->rql.resource);
+  d_str_free(req->rql.http);
 }

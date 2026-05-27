@@ -61,12 +61,12 @@ int d_str_resize(DString *str, size_t desiredSize) {
   return 1;
 }
 
-int d_str_equal(DString *str1, DString *str2) {
+int d_str_equal(const DString *str1, const DString *str2) {
   return strcmp(str1->str, str2->str);
 }
 
 // http://www.cse.yorku.ca/~oz/hash.html
-uint32_t d_str_hash(DString *str) {
+uint32_t d_str_hash(const DString *str) {
   uint32_t hash = 5381;
   int c;
 
@@ -93,7 +93,7 @@ int d_str_append(DString *to_str, const char *from_str) {
 }
 
 void d_str_truncate(DString *str, size_t len) {
-  if (len + 1 > str->allocated_size || len < 0) {
+  if (len + 1 > str->allocated_size) {
     return;
   }
 
@@ -154,69 +154,77 @@ void d_str_ltrim(DString *str) {
 }
 
 void d_str_lower(DString *str) {
-  for (int i = 0; i < str->len; i++) {
+  for (size_t i = 0; i < str->len; i++) {
     str->str[i] = tolower(str->str[i]);
   }
 }
 
 void d_str_upper(DString *str) {
-  for (int i = 0; i < str->len; i++) {
+  for (size_t i = 0; i < str->len; i++) {
     str->str[i] = toupper(str->str[i]);
   }
 }
 
-char **d_str_split(const DString *str, const char *delimiter) {
+DString **d_str_split(const DString *str, const char *delimiter,
+                      int numSplits) {
   if (!str || !str->str || !delimiter)
     return NULL;
 
   size_t delim_len = strlen(delimiter);
 
   if (delim_len == 0) {
-    char **result = malloc(2 * sizeof(char *));
-    result[0] = strdup(str->str);
+    DString **result = malloc(2 * sizeof(DString *));
+    result[0] = d_str_new(str->str);
     result[1] = NULL;
     return result;
   }
 
-  size_t count = 1;
+  int count = 1;
   const char *tmp = str->str;
   while ((tmp = strstr(tmp, delimiter)) != NULL) {
+    if (count == numSplits) {
+      break;
+    }
     count++;
     tmp += delim_len;
   }
 
-  char **result = malloc((count + 1) * sizeof(char *));
+  DString **result = malloc((count + 1) * sizeof(DString *));
   if (!result)
     return NULL;
 
-  size_t i = 0;
-  const char *start = str->str;
-  const char *end;
+  int i = 0;
+  char *start = str->str;
+  char *end;
 
   while ((end = strstr(start, delimiter)) != NULL) {
-    size_t token_len = end - start;
+    if (i == count - 1) {
+      break;
+    }
+    char temp = end[0];
+    end[0] = '\0';
+    DString *newStr = d_str_new(start);
 
-    result[i] = malloc(token_len + 1);
-    memcpy(result[i], start, token_len);
-    result[i][token_len] = '\0';
+    result[i] = newStr;
+    end[0] = temp;
 
     i++;
     start = end + delim_len;
   }
 
-  result[i] = strdup(start);
+  result[i] = d_str_new(start);
 
   result[i + 1] = NULL;
 
   return result;
 }
 
-void d_str_free_multiple(char **parts) {
+void d_str_free_multiple(DString **parts) {
   if (!parts)
     return;
-  char **temp = parts;
+  DString **temp = parts;
   while (*temp != NULL) {
-    free(*temp);
+    d_str_free(*temp);
     temp++;
   }
   free(parts);

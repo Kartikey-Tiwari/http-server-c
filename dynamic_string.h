@@ -14,8 +14,8 @@ DString *d_str_new(const char *str);
 DString *d_str_dup(const DString *str);
 void d_str_free(DString *str);
 
-int d_str_equal(DString *str1, DString *str2);
-uint32_t d_str_hash(DString *str);
+int d_str_equal(const DString *str1, const DString *str2);
+uint32_t d_str_hash(const DString *str);
 
 int d_str_append(DString *to_str, const char *from_str);
 void d_str_truncate(DString *str, size_t len);
@@ -25,7 +25,7 @@ void d_str_ltrim(DString *str);
 void d_str_lower(DString *str);
 void d_str_upper(DString *str);
 
-char **d_str_split(const DString *str, const char *delimiter);
-void d_str_free_multiple(char **parts);
+DString **d_str_split(const DString *str, const char *delimiter, int numSplits);
+void d_str_free_multiple(DString **parts);
 
 #endif

@@ -69,7 +69,7 @@ int isValidContentLength(char *val) {
 void safeSend(int fd, char *buf, int bufSize) {
   int rv, bytesLeft = bufSize;
   while ((rv = send(fd, buf + bufSize - bytesLeft, bytesLeft, 0)) != -1 &&
-         bytesLeft != 0) {
+         bytesLeft > 0) {
     bytesLeft -= rv;
   }
 }

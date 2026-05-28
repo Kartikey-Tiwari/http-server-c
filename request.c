@@ -10,6 +10,9 @@ Request *createRequest() {
   req->contentLen = 0;
   req->bytesRead = 0;
   req->state = REQUEST_INITIALIZED;
+  req->rql.method = NULL;
+  req->rql.resource = NULL;
+  req->rql.http = NULL;
   return req;
 }
 
@@ -45,4 +48,5 @@ void freeRequest(Request *req) {
   d_str_free(req->rql.method);
   d_str_free(req->rql.resource);
   d_str_free(req->rql.http);
+  free(req);
 }

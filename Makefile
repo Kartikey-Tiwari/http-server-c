@@ -1,6 +1,6 @@
 # --- Setup Variables ---
 CC ?= cc
-CFLAGS = -Wall -Wextra -g -O2
+CFLAGS = -Wall -Wextra -g -O2 -pthread
 SANFLAGS = -fsanitize=address 
 
 ifdef ASAN

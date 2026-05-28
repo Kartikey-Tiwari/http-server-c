@@ -1,4 +1,5 @@
 #include "server.h"
+#include "clientqueue.h"
 #include "headers.h"
 #include "parser.h"
 #include "request.h"
@@ -6,8 +7,9 @@
 #include "utils.h"
 
 #include <arpa/inet.h>
-#include <pthread.h>
+#include <bits/pthreadtypes.h>
 #include <errno.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,73 +20,72 @@
 
 volatile sig_atomic_t keep_running = 1;
 
-typedef struct WorkerArgs {
-  int new_fd;
-  void (*handler)(Request *req, Response *res);
-} WorkerArgs;
+#define POOL_SIZE 4
+ClientQueue *queue;
+pthread_t threadpool[POOL_SIZE];
+void (*serverHandler)(Request *req, Response *res);
 
 void *threadFunc(void *arg) {
-  WorkerArgs *workerArgs = (WorkerArgs *)arg;
-  int new_fd = workerArgs->new_fd;
-  void (*handler)(Request *req, Response *res) = workerArgs->handler;
+  (void)arg;
+  while (1) {
+    int new_fd = pop_queue(queue);
 
-  Response *res = createResponse(new_fd);
+    Response *res = createResponse(new_fd);
+    Request *req = createRequest();
+    ReturnCode rc = readRequestFromClient(new_fd, &req, &keep_running);
 
-  Request *req = createRequest();
-  ReturnCode rc = readRequestFromClient(new_fd, &req, &keep_running);
-
-  if (req->state == REQUEST_ERROR || rc == INTERRUPTED) {
-    StatusCode status = OK;
-    switch (rc) {
-    case REQUEST_METHOD_ERROR:
-    case REQUEST_INVALID_CHAR_ERROR:
-    case HEADER_FORMAT_ERROR:
-    case BODY_LENGTH_MISMATCH:
-      if (rc == REQUEST_METHOD_ERROR) {
-        printf("request method error\n");
-      } else if (rc == REQUEST_INVALID_CHAR_ERROR) {
-        printf("request invalid character error\n");
-      } else if (rc == HEADER_FORMAT_ERROR) {
-        printf("Header format error\n");
-      } else if (rc == BODY_LENGTH_MISMATCH) {
-        printf("body length mismatch\n");
+    if (req->state == REQUEST_ERROR || rc == INTERRUPTED) {
+      StatusCode status = OK;
+      switch (rc) {
+      case REQUEST_METHOD_ERROR:
+      case REQUEST_INVALID_CHAR_ERROR:
+      case HEADER_FORMAT_ERROR:
+      case BODY_LENGTH_MISMATCH:
+        if (rc == REQUEST_METHOD_ERROR) {
+          printf("request method error\n");
+        } else if (rc == REQUEST_INVALID_CHAR_ERROR) {
+          printf("request invalid character error\n");
+        } else if (rc == HEADER_FORMAT_ERROR) {
+          printf("Header format error\n");
+        } else if (rc == BODY_LENGTH_MISMATCH) {
+          printf("body length mismatch\n");
+        }
+        printf("bad request!\n");
+        status = BAD_REQUEST;
+        break;
+      case REQUEST_HTTP_VER_ERROR:
+        printf("http version not supported\n");
+        status = HTTP_UNSUPPORTED_VER;
+        break;
+      case INTERRUPTED:
+        printf("server interrupted\n");
+        status = SERVER_ERROR;
+        break;
+      default:;
       }
-      printf("bad request!\n");
-      status = BAD_REQUEST;
-      break;
-    case REQUEST_HTTP_VER_ERROR:
-      printf("http version not supported\n");
-      status = HTTP_UNSUPPORTED_VER;
-      break;
-    case INTERRUPTED:
-      printf("server interrupted\n");
-      status = SERVER_ERROR;
-      break;
-    default:;
-    }
-    writeStatusLine(res, status);
-    setHeader(res->headers, d_str_new("Content-Type"),
-              d_str_new("text/html"));
-    char *body = httpCodeToHTML(status);
-    int bodyLen = strlen(body);
-    char *len = itoa(bodyLen);
-    setHeader(res->headers, d_str_new("Content-Length"), d_str_new(len));
-    free(len);
-    writeHeaders(res);
-    writeBody(res, body, bodyLen);
-    responseEnd(res);
-  } else {
-    if (req->state == DONE) {
-      printRequest(req);
-      handler(req, res);
-      if (res->state != RESPONSE_DONE) {
-        responseEnd(res);
+      writeStatusLine(res, status);
+      setHeader(res->headers, d_str_new("Content-Type"),
+                d_str_new("text/html"));
+      char *body = httpCodeToHTML(status);
+      int bodyLen = strlen(body);
+      char *len = itoa(bodyLen);
+      setHeader(res->headers, d_str_new("Content-Length"), d_str_new(len));
+      free(len);
+      writeHeaders(res);
+      writeBody(res, body, bodyLen);
+      responseEnd(res);
+    } else {
+      if (req->state == DONE) {
+        /* printRequest(req); */
+        serverHandler(req, res);
+        if (res->state != RESPONSE_DONE) {
+          responseEnd(res);
+        }
       }
     }
+    freeRequest(req);
+    freeResponse(res);
   }
-  freeRequest(req);
-  freeResponse(res);
-  free(workerArgs);
   return NULL;
 }
 
@@ -163,6 +164,24 @@ void serverListen(Server *server,
     exit(1);
   }
 
+  serverHandler = handler;
+  queue = malloc(sizeof(ClientQueue));
+  init_queue(queue);
+
+  sigset_t mask;
+  sigemptyset(&mask);
+  sigaddset(&mask, SIGINT);
+  pthread_sigmask(SIG_BLOCK, &mask, NULL);
+
+  for (int i = 0; i < POOL_SIZE; i++) {
+    if (pthread_create(&threadpool[i], NULL, threadFunc, NULL) != 0) {
+      perror("pthread_create");
+      exit(1);
+    }
+  }
+
+  pthread_sigmask(SIG_UNBLOCK, &mask, NULL);
+
   struct sockaddr_storage their_addr;
   socklen_t their_addr_size = sizeof their_addr;
   int new_fd;
@@ -181,25 +200,15 @@ void serverListen(Server *server,
 
     inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr),
               s, sizeof s);
-    printf("\n[Server]: got connection from %s\n", s);
+    /* printf("\n[Server]: got connection from %s\n", s); */
 
-    WorkerArgs *args = malloc(sizeof(WorkerArgs));
-    args->new_fd = new_fd;
-    args->handler = handler;
-
-    pthread_t thread;
-    if (pthread_create(&thread, NULL, threadFunc, args) != 0) {
-      perror("pthread_create");
-      free(args);
-      close(new_fd);
-    } else {
-      pthread_detach(thread);
-    }
+    push_queue(queue, new_fd);
   }
 }
 
 void stopListening(Server *server) {
   printf("server stopped\n");
+  free(queue);
   close(server->sockfd);
   exit(0);
 }

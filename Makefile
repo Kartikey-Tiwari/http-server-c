@@ -11,7 +11,7 @@ endif
 OBJ_DIR = obj
 
 # --- Files ---
-SRCS = main.c server.c parser.c request.c utils.c response.c headers.c hashmap.c dynamic_string.c
+SRCS = main.c server.c parser.c request.c utils.c response.c headers.c hashmap.c dynamic_string.c clientqueue.c
 OBJS = $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRCS))
 
 TARGET = server
